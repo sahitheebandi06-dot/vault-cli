@@ -1,0 +1,19 @@
+# Bundler
+Gemfile.lock
+vendor/bundle/
+
+# Vault data (never commit credentials)
+.vault_cli_store
+
+# CSV exports
+vault_export_*.csv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
