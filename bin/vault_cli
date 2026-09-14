@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# VaultCLI — Terminal-based password manager
+#
+# Usage:
+#   ruby bin/vault_cli
+#
+# On first run, you will be prompted to create a master password.
+# On subsequent runs, enter your master password to unlock the vault.
+# All credentials are stored in an AES-256-GCM encrypted file.
+
+$LOAD_PATH.unshift(File.join(__dir__, '..', 'lib'))
+
+require 'cli'
+
+VaultCLI::CLI.new.run
