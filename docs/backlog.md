@@ -21,3 +21,4 @@
 | Clipboard copy (don't show pw on screen) | 2 | Medium |
 | Import from CSV | 2 | Medium |
 | Password expiry reminders | 2 | Low |
+| TPM support for storing encryption keys | 3 | Low |
