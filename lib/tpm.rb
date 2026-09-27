@@ -35,37 +35,37 @@ module VaultCLI
                                                                     )} -c #{File.join(@tpm_path,
                                                                                       RSA_CTX)}")
     end
-  end
 
-  def create_primary_key
-    system("tpm2_createprimary -C o -c #{File.join(@tpm_path, PRIMARY_CTX)}")
-  end
+    def create_primary_key
+      system("tpm2_createprimary -C o -c #{File.join(@tpm_path, PRIMARY_CTX)}")
+    end
 
-  def encrypt(plaintext)
-    File.write(File.join(@tpm_path, PLAINTEXT_FILE), plaintext)
-    system("tpm2_rsaencrypt -c #{File.join(@tpm_path,
-                                           RSA_CTX)} -o #{File.join(@tpm_path,
-                                                                    CIPHERTEXT_FILE)} #{File.join(
-                                                                      @tpm_path, PLAINTEXT_FILE
-                                                                    )}")
-    ciphertext = File.binread(File.join(@tpm_path, CIPHERTEXT_FILE))
-    FileUtils.rm_f(File.join(@tpm_path, PLAINTEXT_FILE))
-    FileUtils.rm_f(File.join(@tpm_path, CIPHERTEXT_FILE))
-    ciphertext
-  end
+    def encrypt(plaintext)
+      File.write(File.join(@tpm_path, PLAINTEXT_FILE), plaintext)
+      system("tpm2_rsaencrypt -c #{File.join(@tpm_path,
+                                            RSA_CTX)} -o #{File.join(@tpm_path,
+                                                                      CIPHERTEXT_FILE)} #{File.join(
+                                                                        @tpm_path, PLAINTEXT_FILE
+                                                                      )}")
+      ciphertext = File.binread(File.join(@tpm_path, CIPHERTEXT_FILE))
+      FileUtils.rm_f(File.join(@tpm_path, PLAINTEXT_FILE))
+      FileUtils.rm_f(File.join(@tpm_path, CIPHERTEXT_FILE))
+      ciphertext
+    end
 
-  def decrypt(ciphertext)
-    File.write(File.join(@tpm_path, CIPHERTEXT_FILE), ciphertext)
-    system("tpm2_rsadecrypt -c #{File.join(@tpm_path,
-                                           RSA_CTX)} -o #{File.join(@tpm_path,
-                                                                    PLAINTEXT_FILE)} #{File.join(
-                                                                      @tpm_path, CIPHERTEXT_FILE
-                                                                    )}")
-    plaintext = File.read(File.join(@tpm_path, PLAINTEXT_FILE))
-    FileUtils.rm_f(File.join(@tpm_path, PLAINTEXT_FILE))
-    FileUtils.rm_f(File.join(@tpm_path, CIPHERTEXT_FILE))
-    plaintext
-  end
+    def decrypt(ciphertext)
+      File.write(File.join(@tpm_path, CIPHERTEXT_FILE), ciphertext)
+      system("tpm2_rsadecrypt -c #{File.join(@tpm_path,
+                                            RSA_CTX)} -o #{File.join(@tpm_path,
+                                                                      PLAINTEXT_FILE)} #{File.join(
+                                                                        @tpm_path, CIPHERTEXT_FILE
+                                                                      )}")
+      plaintext = File.read(File.join(@tpm_path, PLAINTEXT_FILE))
+      FileUtils.rm_f(File.join(@tpm_path, PLAINTEXT_FILE))
+      FileUtils.rm_f(File.join(@tpm_path, CIPHERTEXT_FILE))
+      plaintext
+    end
 
-  private_class_method :create_primary_key
+    private_class_method :create_primary_key
+  end
 end
