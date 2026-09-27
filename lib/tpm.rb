@@ -36,10 +36,6 @@ module VaultCLI
                                                                                       RSA_CTX)}")
     end
 
-    def create_primary_key
-      system("tpm2_createprimary -C o -c #{File.join(@tpm_path, PRIMARY_CTX)}")
-    end
-
     def encrypt(plaintext)
       File.write(File.join(@tpm_path, PLAINTEXT_FILE), plaintext)
       system("tpm2_rsaencrypt -c #{File.join(@tpm_path,
@@ -66,6 +62,10 @@ module VaultCLI
       plaintext
     end
 
-    private_class_method :create_primary_key
+    private
+
+    def create_primary_key
+      system("tpm2_createprimary -C o -c #{File.join(@tpm_path, PRIMARY_CTX)}")
+    end
   end
 end
