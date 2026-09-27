@@ -91,7 +91,7 @@ RSpec.describe VaultCLI::TPM do
       commands = []
 
       allow_any_instance_of(VaultCLI::TPM)
-        .to receive(:system) do |command|
+        .to receive(:system) do |tpm_instance, command|
           commands << command
 
           File.write(rsa_context, 'generated RSA context') if command.start_with?('tpm2_load')
