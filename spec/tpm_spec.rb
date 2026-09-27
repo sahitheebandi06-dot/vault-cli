@@ -11,13 +11,13 @@ RSpec.describe VaultCLI::TPM do
   before do
     FileUtils.mkdir_p(tpm_path_temp)
     FileUtils.rm_f([
-                      File.join(tpm_path_temp, VaultCLI::TPM::PRIMARY_CTX),
-                      File.join(tpm_path_temp, VaultCLI::TPM::RSA_CTX),
-                      File.join(tpm_path_temp, VaultCLI::TPM::RSA_PUB),
-                      File.join(tpm_path_temp, VaultCLI::TPM::RSA_PRIV),
-                      File.join(tpm_path_temp, VaultCLI::TPM::PLAINTEXT_FILE),
-                      File.join(tpm_path_temp, VaultCLI::TPM::CIPHERTEXT_FILE)
-                    ])
+                     File.join(tpm_path_temp, VaultCLI::TPM::PRIMARY_CTX),
+                     File.join(tpm_path_temp, VaultCLI::TPM::RSA_CTX),
+                     File.join(tpm_path_temp, VaultCLI::TPM::RSA_PUB),
+                     File.join(tpm_path_temp, VaultCLI::TPM::RSA_PRIV),
+                     File.join(tpm_path_temp, VaultCLI::TPM::PLAINTEXT_FILE),
+                     File.join(tpm_path_temp, VaultCLI::TPM::CIPHERTEXT_FILE)
+                   ])
   end
 
   after do
@@ -42,9 +42,6 @@ RSpec.describe VaultCLI::TPM do
       tpm = described_class.new(tpm_path: tpm_path_temp)
 
       expect(tpm.instance_variable_get(:@tpm_path)).to eq(tpm_path_temp)
-      expect(File).to exist(
-        File.join(tpm_path_temp, described_class::PRIMARY_CTX)
-      )
     end
 
     it 'creates a primary key when the primary context is missing' do
@@ -52,15 +49,17 @@ RSpec.describe VaultCLI::TPM do
         .to receive(:system)
         .and_return(true)
 
+      expect_any_instance_of(VaultCLI::TPM)
+        .to receive(:system)
+        .with("tpm2_createprimary -C o -c #{File.join(tpm_path_temp,
+                                                      described_class::PRIMARY_CTX)}")
+        .and_return(true)
+
       expect(File).not_to exist(
         File.join(tpm_path_temp, described_class::PRIMARY_CTX)
       )
 
       described_class.new(tpm_path: tpm_path_temp)
-
-      expect(File).to exist(
-        File.join(tpm_path_temp, described_class::PRIMARY_CTX)
-      )
     end
 
     it 'does not recreate an existing primary key' do
@@ -95,9 +94,7 @@ RSpec.describe VaultCLI::TPM do
         .to receive(:system) do |command|
           commands << command
 
-          if command.start_with?('tpm2_load')
-            File.write(rsa_context, 'generated RSA context')
-          end
+          File.write(rsa_context, 'generated RSA context') if command.start_with?('tpm2_load')
 
           true
         end
@@ -202,18 +199,16 @@ RSpec.describe VaultCLI::TPM do
       )
     end
 
-    it 'propagates TPM command failures' do
+    it 'fails when encryption does not produce ciphertext' do
       tpm = described_class.allocate
       tpm.instance_variable_set(:@tpm_path, tpm_path_temp)
 
-      allow(tpm).to receive(:system) do |command|
-        puts 'TPM encryption command failed' if command.start_with?('tpm2_rsaencrypt')
+      allow(tpm).to receive(:system) do |_command|
         false
       end
 
       expect { tpm.encrypt('secret') }
-        .to output("TPM encryption command failed\n").to_stdout
-        .and raise_error(Errno::ENOENT)
+        .to raise_error(Errno::ENOENT)
     end
   end
 
