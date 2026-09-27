@@ -37,7 +37,7 @@ module VaultCLI
     end
 
     def encrypt(plaintext)
-      File.write(File.join(@tpm_path, PLAINTEXT_FILE), plaintext)
+      File.binwrite(File.join(@tpm_path, PLAINTEXT_FILE), plaintext)
       system("tpm2_rsaencrypt -c #{File.join(@tpm_path,
                                             RSA_CTX)} -o #{File.join(@tpm_path,
                                                                       CIPHERTEXT_FILE)} #{File.join(
@@ -50,13 +50,13 @@ module VaultCLI
     end
 
     def decrypt(ciphertext)
-      File.write(File.join(@tpm_path, CIPHERTEXT_FILE), ciphertext)
+      File.binwrite(File.join(@tpm_path, CIPHERTEXT_FILE), ciphertext)
       system("tpm2_rsadecrypt -c #{File.join(@tpm_path,
                                             RSA_CTX)} -o #{File.join(@tpm_path,
                                                                       PLAINTEXT_FILE)} #{File.join(
                                                                         @tpm_path, CIPHERTEXT_FILE
                                                                       )}")
-      plaintext = File.read(File.join(@tpm_path, PLAINTEXT_FILE))
+      plaintext = File.binread(File.join(@tpm_path, PLAINTEXT_FILE))
       FileUtils.rm_f(File.join(@tpm_path, PLAINTEXT_FILE))
       FileUtils.rm_f(File.join(@tpm_path, CIPHERTEXT_FILE))
       plaintext
