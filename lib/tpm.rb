@@ -5,6 +5,8 @@ require 'fileutils'
 
 module VaultCLI
   class TPM
+    class UnavailableError < StandardError; end
+
     PRIMARY_CTX = 'tpm_primary.ctx'
     RSA_PUB = 'tpm_rsa.pub'
     RSA_PRIV = 'tpm_rsa.priv'
@@ -17,7 +19,10 @@ module VaultCLI
 
     def initialize(tpm_path: File.join(Dir.home, '.local', 'share', 'vault-cli', 'tpm'))
       unless system('which', 'tpm2_createprimary', out: File::NULL, err: File::NULL)
-        raise 'tpm2-tools not found. Please install tpm2-tools to use TPM functionality.'
+        raise UnavailableError, 'tpm2-tools not found. Please install tpm2-tools to use TPM functionality.'
+      end
+      unless system('tpm2_getcap', 'properties-fixed', out: File::NULL, err: File::NULL)
+        raise UnavailableError, 'TPM device is unavailable'
       end
 
       @tpm_path = tpm_path
@@ -121,7 +126,7 @@ module VaultCLI
       output, _error, status = Open3.capture3(
         'tpm2_getcap', 'handles-persistent'
       )
-      raise 'Could not list persistent TPM handles' unless status.success?
+      raise UnavailableError, 'Could not list persistent TPM handles' unless status.success?
 
       output.scan(/0x[0-9a-fA-F]+/).map { |handle| handle.to_i(16) }
     end
