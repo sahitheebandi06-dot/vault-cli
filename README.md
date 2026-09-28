@@ -26,3 +26,5 @@ compat-openssl10-devel libcurl-devel PyYAML
 ```bash
 sudo pacman -S tpm2-tools
 ```
+---
+**Note** TPM will be unavailable through WSL
