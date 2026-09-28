@@ -36,6 +36,11 @@ module VaultCLI
       @path    = path
       @entries = []
       @tpm     = tpm == :auto ? detect_tpm : tpm
+      if @tpm
+        puts 'Using TPM'
+      else
+        puts 'TPM Unavailable'
+      end
     end
 
     # Decrypt and load entries from disk using the given master password.
@@ -55,7 +60,7 @@ module VaultCLI
         salt       = raw.byteslice(0, SALT_LENGTH)
         iv         = raw.byteslice(SALT_LENGTH, IV_LENGTH)
         auth_tag   = raw.byteslice(SALT_LENGTH + IV_LENGTH, TAG_LENGTH)
-        ciphertext = raw.byteslice(SALT_LENGTH + IV_LENGTH + TAG_LENGTH..)
+        ciphertext = raw.byteslice((SALT_LENGTH + IV_LENGTH + TAG_LENGTH)..)
         key = derive_key(master_password, salt)
       end
 
@@ -195,10 +200,10 @@ module VaultCLI
     def derive_key(password, salt)
       OpenSSL::KDF.pbkdf2_hmac(
         password,
-        salt:       salt,
+        salt: salt,
         iterations: PBKDF2_ITERATIONS,
-        length:     KEY_LENGTH,
-        hash:       'sha256'
+        length: KEY_LENGTH,
+        hash: 'sha256'
       )
     end
   end
