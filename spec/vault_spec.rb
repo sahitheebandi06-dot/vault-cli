@@ -7,6 +7,11 @@ RSpec.describe VaultCLI::Vault do
   let(:vault_path) { File.join(Dir.tmpdir, "vault_test_#{SecureRandom.hex(8)}") }
   let(:master_password) { 'correct-horse-battery-staple' }
 
+  before do
+    allow(VaultCLI::TPM).to receive(:new)
+      .and_raise(VaultCLI::TPM::UnavailableError)
+  end
+
   after { FileUtils.rm_f(vault_path) }
 
   describe '#save and #unlock' do
@@ -43,6 +48,39 @@ RSpec.describe VaultCLI::Vault do
       expect(raw).not_to include(secret)
       expect(raw).not_to include('bank.com')
       expect(raw).not_to include('admin')
+    end
+
+    it 'uses the TPM-wrapped secret with the password when TPM is injected' do
+      tpm_secret = nil
+      wrapped_secret = "wrapped TPM secret".b
+      tpm = double('TPM')
+      allow(tpm).to receive(:encrypt) do |secret|
+        tpm_secret = secret
+        wrapped_secret
+      end
+      allow(tpm).to receive(:decrypt).with(wrapped_secret) { tpm_secret }
+
+      vault = described_class.new(path: vault_path, tpm: tpm)
+      vault.add(VaultCLI::Entry.new(site: 'example.com', username: 'user', password: 'secret'))
+      vault.save(master_password)
+
+      raw = File.binread(vault_path)
+      expect(raw).to start_with(VaultCLI::Vault::TPM_ENVELOPE_MAGIC)
+
+      loaded = described_class.new(path: vault_path, tpm: tpm)
+      loaded.unlock(master_password)
+      expect(loaded.entries.first.site).to eq('example.com')
+      expect { described_class.new(path: vault_path, tpm: nil).unlock(master_password) }
+        .to raise_error(/requires its TPM key/)
+      expect { described_class.new(path: vault_path, tpm: tpm).unlock('wrong-password') }
+        .to raise_error(/Wrong master password or corrupt vault file/)
+    end
+
+    it 'falls back to the existing password-only format when TPM is unavailable' do
+      vault = described_class.new(path: vault_path)
+      vault.save(master_password)
+
+      expect(File.binread(vault_path)).not_to start_with(VaultCLI::Vault::TPM_ENVELOPE_MAGIC)
     end
   end
 

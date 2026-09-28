@@ -3,6 +3,7 @@
 require 'openssl'
 require 'securerandom'
 require 'json'
+require_relative 'tpm'
 require_relative 'entry'
 
 module VaultCLI
@@ -10,9 +11,12 @@ module VaultCLI
   # persistence to disk.
   #
   # Encryption scheme:
-  #   - Key derivation: PBKDF2-HMAC-SHA256, 600_000 iterations, 32-byte key
+  #   - Software key: PBKDF2-HMAC-SHA256, 600_000 iterations, 32 bytes
+  #   - TPM key: HKDF combines the password-derived key with a TPM-wrapped secret
   #   - Cipher: AES-256-GCM (authenticated encryption)
-  #   - File format: salt (32 B) || iv (12 B) || auth_tag (16 B) || ciphertext
+  #   - Software format: salt || iv || auth_tag || ciphertext
+  #   - TPM format: magic || salt || iv || auth_tag || wrapped-secret-length ||
+  #                 wrapped-secret || ciphertext
   #
   # No password or plaintext credential ever touches the filesystem.
   class Vault
@@ -22,13 +26,16 @@ module VaultCLI
     IV_LENGTH          = 12  # bytes (GCM standard)
     TAG_LENGTH         = 16  # bytes (GCM auth tag)
     CIPHER_ALGO        = 'aes-256-gcm'
+    TPM_ENVELOPE_MAGIC = 'VLT1'.b
+    TPM_KDF_INFO       = 'VaultCLI TPM-backed encryption key'
 
     attr_reader :entries, :path
 
     # @param path [String] filesystem path for the encrypted vault file
-    def initialize(path: File.join(Dir.home, '.vault_cli_store'))
+    def initialize(path: File.join(Dir.home, '.vault_cli_store'), tpm: :auto)
       @path    = path
       @entries = []
+      @tpm     = tpm == :auto ? detect_tpm : tpm
     end
 
     # Decrypt and load entries from disk using the given master password.
@@ -38,12 +45,19 @@ module VaultCLI
     # @raise [RuntimeError] if the file is corrupt or the password is wrong
     def unlock(master_password)
       raw = File.binread(@path)
-      salt       = raw.byteslice(0, SALT_LENGTH)
-      iv         = raw.byteslice(SALT_LENGTH, IV_LENGTH)
-      auth_tag   = raw.byteslice(SALT_LENGTH + IV_LENGTH, TAG_LENGTH)
-      ciphertext = raw.byteslice(SALT_LENGTH + IV_LENGTH + TAG_LENGTH..)
+      if raw.start_with?(TPM_ENVELOPE_MAGIC)
+        salt, iv, auth_tag, wrapped_secret, ciphertext = parse_tpm_envelope(raw)
+        raise 'This vault requires its TPM key, but TPM is unavailable' unless @tpm
 
-      key = derive_key(master_password, salt)
+        tpm_secret = @tpm.decrypt(wrapped_secret)
+        key = derive_tpm_key(master_password, salt, tpm_secret)
+      else
+        salt       = raw.byteslice(0, SALT_LENGTH)
+        iv         = raw.byteslice(SALT_LENGTH, IV_LENGTH)
+        auth_tag   = raw.byteslice(SALT_LENGTH + IV_LENGTH, TAG_LENGTH)
+        ciphertext = raw.byteslice(SALT_LENGTH + IV_LENGTH + TAG_LENGTH..)
+        key = derive_key(master_password, salt)
+      end
 
       decipher = OpenSSL::Cipher.new(CIPHER_ALGO)
       decipher.decrypt
@@ -63,7 +77,13 @@ module VaultCLI
     # @param master_password [String]
     def save(master_password)
       salt = SecureRandom.random_bytes(SALT_LENGTH)
-      key  = derive_key(master_password, salt)
+      if @tpm
+        tpm_secret = SecureRandom.random_bytes(KEY_LENGTH)
+        wrapped_secret = @tpm.encrypt(tpm_secret)
+        key = derive_tpm_key(master_password, salt, tpm_secret)
+      else
+        key = derive_key(master_password, salt)
+      end
 
       cipher = OpenSSL::Cipher.new(CIPHER_ALGO)
       cipher.encrypt
@@ -74,7 +94,13 @@ module VaultCLI
       ciphertext = cipher.update(plaintext) + cipher.final
       auth_tag   = cipher.auth_tag
 
-      File.binwrite(@path, salt + iv + auth_tag + ciphertext)
+      header = if @tpm
+                 TPM_ENVELOPE_MAGIC + salt + iv + auth_tag +
+                   [wrapped_secret.bytesize].pack('N') + wrapped_secret
+               else
+                 salt + iv + auth_tag
+               end
+      File.binwrite(@path, header + ciphertext)
     end
 
     # Returns true when a vault file already exists on disk.
@@ -120,6 +146,46 @@ module VaultCLI
     end
 
     private
+
+    def detect_tpm
+      TPM.new
+    rescue TPM::UnavailableError
+      nil
+    end
+
+    def parse_tpm_envelope(raw)
+      offset = TPM_ENVELOPE_MAGIC.bytesize
+      salt = raw.byteslice(offset, SALT_LENGTH)
+      offset += SALT_LENGTH
+      iv = raw.byteslice(offset, IV_LENGTH)
+      offset += IV_LENGTH
+      auth_tag = raw.byteslice(offset, TAG_LENGTH)
+      offset += TAG_LENGTH
+      length_bytes = raw.byteslice(offset, 4)
+      raise 'Corrupt TPM vault file' unless length_bytes&.bytesize == 4
+
+      wrapped_length = length_bytes.unpack1('N')
+      offset += 4
+      wrapped_secret = raw.byteslice(offset, wrapped_length)
+      unless wrapped_length.positive? && wrapped_secret&.bytesize == wrapped_length
+        raise 'Corrupt TPM vault file'
+      end
+
+      offset += wrapped_length
+      ciphertext = raw.byteslice(offset..)
+      [salt, iv, auth_tag, wrapped_secret, ciphertext]
+    end
+
+    def derive_tpm_key(password, salt, tpm_secret)
+      password_key = derive_key(password, salt)
+      OpenSSL::KDF.hkdf(
+        password_key + tpm_secret,
+        salt: salt,
+        info: TPM_KDF_INFO,
+        length: KEY_LENGTH,
+        hash: 'sha256'
+      )
+    end
 
     # Derive a symmetric key from the master password and a random salt.
     #
