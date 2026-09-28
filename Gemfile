@@ -6,3 +6,5 @@ ruby '>= 3.0'
 
 gem 'rspec', '~> 3.12'
 gem 'rubocop', '~> 1.50'
+gem 'clipboard', '>= 2.0'
+gem "ffi", platforms: :windows
