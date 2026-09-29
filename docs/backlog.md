@@ -11,14 +11,7 @@
 | 6 | Delete credentials | 2 | Done |
 | 7 | Password strength rating | 2 | Done |
 | 8 | Category filtering | 2 | Done |
+| 9 | Clipboard copy (don't show pw on screen) | 2 | Done |
+| 10 | TPM support for storing encryption keys | 3 | Done |
 
-**Total completed: 20 points**
-
-## Remaining (Final Deliverable)
-| Story | Points | Priority |
-|-------|--------|----------|
-| Update existing passwords | 3 | High |
-| Clipboard copy (don't show pw on screen) | 2 | Medium |
-| Import from CSV | 2 | Medium |
-| Password expiry reminders | 2 | Low |
-| TPM support for storing encryption keys | 3 | Low |
+**Total completed: 25 points**
