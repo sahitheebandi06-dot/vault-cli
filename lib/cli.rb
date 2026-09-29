@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require 'io/console'
+require 'open3'
+require 'rbconfig'
+require 'clipboard'
 require_relative 'vault'
 require_relative 'entry'
 require_relative 'password_generator'
@@ -141,7 +144,7 @@ module VaultCLI
 
       puts "Category (#{Entry::VALID_CATEGORIES.join(', ')}) or blank to skip:"
       category = $stdin.gets&.strip
-      category = nil if category&.empty?
+      category = nil if category && category.empty?
 
       entry = Entry.new(site: site, username: username,
                         password: password, category: category)
@@ -164,7 +167,35 @@ module VaultCLI
           puts "  #{i + 1}. #{entry}"
           puts "     Password: #{entry.password}"
         end
+
+        copy_search_result(results)
       end
+    end
+
+    def copy_search_result(results)
+      loop do
+        print 'Enter entry number to copy password, or press Enter to skip: '
+        selection = $stdin.gets&.strip
+        return if selection.nil? || selection.empty?
+
+        unless selection.match?(/\A\d+\z/) && selection.to_i.between?(1, results.size)
+          puts "Invalid selection. Enter a number from 1 to #{results.size}, or press Enter to skip."
+          next
+        end
+
+        if copy_to_clipboard(results[selection.to_i - 1].password)
+          puts 'Password copied to clipboard.'
+        else
+          puts 'Could not copy password: no supported clipboard command succeeded.'
+        end
+        return
+      end
+    end
+
+    def copy_to_clipboard(password)
+      Clipboard.copy(password)
+    rescue Clipboard::ClipboardError, StandardError
+      puts 'Unable to access clipboard'
     end
 
     def list_all
@@ -295,11 +326,11 @@ module VaultCLI
     end
 
     def csv_content
-      lines = ["site,username,password,category"]
+      lines = ['site,username,password,category']
       @vault.entries.each do |e|
         lines << [e.site, e.username, e.password, e.category].map { |f| csv_escape(f) }.join(',')
       end
-      lines.join("\n") + "\n"
+      "#{lines.join("\n")}\n"
     end
 
     def csv_escape(field)
